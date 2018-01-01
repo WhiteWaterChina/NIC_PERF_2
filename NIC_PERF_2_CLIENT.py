@@ -28,6 +28,7 @@ if jumbo_max not in mtu_list:
     mtu_list.append(jumbo_max)
 
 #get log path
+#create client log path
 with open("/tmp/tools/name", mode="r") as temp_file:
     log_dir_prefix = temp_file.readlines()[0].strip()
 
@@ -87,7 +88,7 @@ for mtu_current in mtu_list:
 
     #start  iperf3
     # start iperf3 server in client
-    subprocess.Popen("numactl --cpunodebind=netdev:%s --membind=netdev:%s iperf3 -s -i 5 --forceflush 5|grep -i sum &" % (sut_devicename, sut_devicename), shell=True, stdout=subprocess.PIPE)
+    subprocess.Popen("numactl --cpunodebind=netdev:%s --membind=netdev:%s iperf3 -s -i 5 --forceflush 5|grep -i sum &" % (client_devicename, client_devicename), shell=True, stdout=subprocess.PIPE)
 
     #login to sut to start server
     ssh_to_sut.connect(sut_ctrl_ip, 22, username=sut_username, password=sut_password)

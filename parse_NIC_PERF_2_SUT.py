@@ -24,7 +24,8 @@ sys.path.append(path)
 
 class parse(object):
     def __init__(self):
-        self.log_dir_prefix = file('/tmp/tools/name').readlines()[0].strip()
+        with open("/tmp/tools/name", mode="r") as f:
+            self.log_dir_prefix = f.readlines()[0].strip()
         self.log_dir_prefix = self.log_dir_prefix + "/Stress/NIC_PERF_2"
         if not os.path.isdir(self.log_dir_prefix):
             os.makedirs(self.log_dir_prefix)
