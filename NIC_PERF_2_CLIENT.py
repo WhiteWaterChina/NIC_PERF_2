@@ -42,7 +42,21 @@ ClientDevicePath= log_dir_prefix + '/Client' + client_devicename
 if not os.path.isdir(ClientDevicePath):
     os.makedirs(ClientDevicePath)
 ssh_to_sut = paramiko.SSHClient()
+# calculate N
+speed_now_list = subprocess.Popen("ethtool %s|grep Speed|awk -F ':' '{print $2}'|awk '{match($0,/([0-9]+)/,a);print a[1]}'" % client_devicename, shell=True, stdout=subprocess.PIPE)
+speed_now_list.wait()
+speed_now = speed_now_list.stdout.readlines()[0].strip()
 
+if speed_now == "10000":
+    N = 2
+elif speed_now == "25000":
+    N = 3
+elif speed_now == "40000":
+    N = 5
+elif speed_now == "100000":
+    N = 11
+else:
+    N = 2
 for mtu_current in mtu_list:
     ssh_to_sut.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh_to_sut.connect(sut_ctrl_ip, 22, username=sut_username, password=sut_password)
@@ -59,8 +73,10 @@ for mtu_current in mtu_list:
 
     #set mtu client
     change_mtu_client = subprocess.Popen("ifconfig %s mtu %s" % (client_devicename, mtu_current), shell=True, stdout=subprocess.PIPE)
-    check_mtu_client = subprocess.Popen("ip addr show|grep %s|grep mtu|awk '{match($0,/mtu\s*([0-9]*)/,a);print a[1]}'" % client_devicename, shell=True, stdout=subprocess.PIPE).stdout.readlines()[0].strip()
-
+    change_mtu_client.wait()
+    check_mtu_client_temp = subprocess.Popen("ip addr show|grep %s|grep mtu|awk '{match($0,/mtu\s*([0-9]*)/,a);print a[1]}'" % client_devicename, shell=True, stdout=subprocess.PIPE)
+    check_mtu_client_temp.wait()
+    check_mtu_client = check_mtu_client_temp.stdout.readlines()[0].strip()
     if check_mtu_client != mtu_current:
         print "Client MTU for %s set failed! Please check! Need %s,but now %s" % (client_devicename, mtu_current, check_mtu_client)
         sys.exit(1)
@@ -68,7 +84,7 @@ for mtu_current in mtu_list:
 
     #login to sut to set mtu
     ssh_to_sut.connect(sut_ctrl_ip, 22, username=sut_username, password=sut_password)
-    ssh_to_sut.exec_command("ifconfig %s mtu %s" % (sut_devicename, mtu_current))
+    ssh_to_sut.exec_command(command="ifconfig %s mtu %s" % (sut_devicename, mtu_current))
     ssh_to_sut.close()
     time.sleep(2)
     ssh_to_sut.connect(sut_ctrl_ip, 22, username=sut_username, password=sut_password)
@@ -96,28 +112,10 @@ for mtu_current in mtu_list:
     ssh_to_sut.close()
 
     #client iperf
-    #calculate N
-    speed_now_list = subprocess.Popen(["ethtool", "%s" % client_devicename],stdout=subprocess.PIPE).stdout.readlines()
-    pattern_speed = re.compile(r"Speed:\s*(\d*)Mb/s")
-    N = 1
-    for item_speed in speed_now_list:
-        speed_temp = re.search(pattern=pattern_speed, string=item_speed)
-        if speed_temp is not None:
-            speed_now = speed_temp.groups()[0]
-
-    if speed_now == "10000":
-        N = 2
-    elif speed_now == "25000":
-        N = 3
-    elif speed_now == "40000":
-        N = 5
-    elif speed_now == "100000":
-        N = 11
-    else:
-        pass
-
     # get client test ip
-    client_test_ip = subprocess.Popen("ip addr show|grep %s|grep inet|awk '{match($s,/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/,a);print a[1]}'" % client_devicename, shell=True, stdout=subprocess.PIPE).stdout.readlines()[0].strip()
+    client_test_ip_temp = subprocess.Popen("ip addr show|grep %s|grep inet|awk '{match($s,/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/,a);print a[1]}'" % client_devicename, shell=True, stdout=subprocess.PIPE)
+    client_test_ip_temp.wait()
+    client_test_ip = client_test_ip_temp.stdout.readlines()[0].strip()
     # iperf -c in sut remotely
     ssh_to_sut.connect(sut_ctrl_ip, 22, username=sut_username, password=sut_password)
     ssh_to_sut.exec_command(command='numactl --cpunodebind=netdev:%s --membind=netdev:%s iperf3 -c %s -t 100 -i 5 --forceflush 5 -P %s |grep -i sum >> %s &' % (sut_devicename, sut_devicename, client_test_ip, N, logname_result_iperf_sut))
